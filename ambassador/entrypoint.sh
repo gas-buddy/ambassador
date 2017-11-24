@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
@@ -11,7 +11,7 @@ fi
 
 APPDIR=${APPDIR:-/application}
 
-pids=()
+pids=""
 
 diediedie() {
     NAME=$1
@@ -26,7 +26,7 @@ diediedie() {
     echo "Here's the envoy.json we were trying to run with:"
     LATEST="$(ls -v /etc/envoy*.json | tail -1)"
     if [ -e "$LATEST" ]; then
-        cat $LATEST
+        cat "$LATEST"
     else
         echo "No config generated."
     fi
@@ -36,25 +36,19 @@ diediedie() {
 }
 
 handle_chld() {
-    local tmp=()
-
-    for (( i=0; i<${#pids[@]}; ++i )); do
-        split=(${pids[$i]//;/ })    # the space after the trailing / is critical!
-        pid=${split[0]}
-        name=${split[1]}
-
-        if [ ! -d /proc/$pid ]; then
-            wait $pid
+    printf '%s\n' "$pids" | while IFS=':' read -r pid name; do
+        if [ ! -d "/proc/$pid" ]; then
+            wait "$pid"
             STATUS=$?
             # echo "AMBASSADOR: $name exited: $STATUS"
             # echo "AMBASSADOR: shutting down"
             diediedie "$name" "$STATUS"
         else
-            tmp+=(${pids[i]})
+            tmp="${tmp:+"${tmp}\n"}$pid;$name"
         fi
     done
 
-    pids=(${tmp[@]})
+    pids="$tmp"
 }
 
 handle_int() {
@@ -65,7 +59,7 @@ set -o monitor
 trap "handle_chld" CHLD
 trap "handle_int" INT
 
-/usr/bin/python3 "$APPDIR/kubewatch.py" sync "$CONFIG_DIR" /etc/envoy.json 
+/usr/bin/python3 "$APPDIR/kubewatch.py" sync "$CONFIG_DIR" /etc/envoy.json
 
 STATUS=$?
 
@@ -75,15 +69,15 @@ fi
 
 echo "AMBASSADOR: starting diagd"
 /usr/bin/python3 "$APPDIR/diagd.py" --no-debugging "$CONFIG_DIR" &
-pids+=("$!;diagd")
+pids="${pids:+"${pids}\n"}$!;diagd"
 
 echo "AMBASSADOR: starting Envoy"
 /usr/bin/python3 "$APPDIR/hot-restarter.py" "$APPDIR/start-envoy.sh" &
 RESTARTER_PID="$!"
-pids+=("${RESTARTER_PID};envoy")
+pids="${pids:+"${pids}\n"}${RESTARTER_PID};envoy"
 
 /usr/bin/python3 "$APPDIR/kubewatch.py" watch "$CONFIG_DIR" /etc/envoy.json -p "${RESTARTER_PID}" &
-pids+=("$!;kubewatch")
+pids="${pids:+"${pids}\n"}$!;kubewatch"
 
 echo "AMBASSADOR: waiting"
 wait

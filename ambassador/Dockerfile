@@ -10,10 +10,11 @@
 # git checkout flynn/feature/extauth
 # 
 # and then read DATAWIRE/README.md.
+# -- Modified by Max Metral from GasBuddy to use Alpine
 
-FROM datawire/ambassador-envoy:vtest_docs_tag3-60-gb2629d084
+FROM gasbuddy/ambassador-envoy:vtest_docs_tag3-60-gb2629d08
 
-MAINTAINER Datawire <flynn@datawire.io>
+MAINTAINER GasBuddy <developers@gasbuddy.com>
 LABEL PROJECT_REPO_URL         = "git@github.com:datawire/ambassador.git" \
       PROJECT_REPO_BROWSER_URL = "https://github.com/datawire/ambassador" \
       DESCRIPTION              = "Ambassador REST Service" \
@@ -26,11 +27,7 @@ LABEL PROJECT_REPO_URL         = "git@github.com:datawire/ambassador.git" \
 # NOTE: If you don't know what you're doing, it's probably a mistake to
 # blindly hack up this file.
 
-# We need curl, pip, and dnsutils (for nslookup).
-RUN apt-get update && apt-get -q install -y \
-    curl \
-    python3-pip \
-    dnsutils
+RUN apk --no-cache add curl python3
 
 # Set WORKDIR to /application which is the root of all our apps then COPY
 # only requirements.txt to avoid screwing up Docker caching and causing a
