@@ -36,19 +36,24 @@ diediedie() {
 }
 
 handle_chld() {
-    printf '%s\n' "$pids" | while IFS=':' read -r pid name; do
-        if [ ! -d "/proc/$pid" ]; then
-            wait "$pid"
+    trap - CHLD
+    local tmp
+    for entry in $pids; do
+        local pid="${entry%:*}"
+        local name="${entry#*:}"
+        if [ ! -d "/proc/${pid}" ]; then
+            wait "${pid}"
             STATUS=$?
             # echo "AMBASSADOR: $name exited: $STATUS"
             # echo "AMBASSADOR: shutting down"
-            diediedie "$name" "$STATUS"
+            diediedie "${name}" "$STATUS"
         else
-            tmp="${tmp:+"${tmp}\n"}$pid;$name"
+            tmp="${tmp:+${tmp} }${entry}"
         fi
     done
 
     pids="$tmp"
+    trap "handle_chld" CHLD
 }
 
 handle_int() {
@@ -69,15 +74,16 @@ fi
 
 echo "AMBASSADOR: starting diagd"
 /usr/bin/python3 "$APPDIR/diagd.py" --no-debugging "$CONFIG_DIR" &
-pids="${pids:+"${pids}\n"}$!;diagd"
+pids="${pids:+${pids} }$!:diagd"
 
 echo "AMBASSADOR: starting Envoy"
 /usr/bin/python3 "$APPDIR/hot-restarter.py" "$APPDIR/start-envoy.sh" &
 RESTARTER_PID="$!"
-pids="${pids:+"${pids}\n"}${RESTARTER_PID};envoy"
+pids="${pids:+${pids} }${RESTARTER_PID}:envoy"
 
 /usr/bin/python3 "$APPDIR/kubewatch.py" watch "$CONFIG_DIR" /etc/envoy.json -p "${RESTARTER_PID}" &
-pids="${pids:+"${pids}\n"}$!;kubewatch"
+pids="${pids:+${pids} }$!:kubewatch"
 
 echo "AMBASSADOR: waiting"
+echo "PIDS: $pids"
 wait
