@@ -6,7 +6,7 @@ import socket
 import threading
 import time
 
-import VERSION
+from .VERSION import Version
 
 class SystemInfo (object):
     MyHostName = socket.gethostname()
@@ -18,7 +18,7 @@ class RichStatus (object):
         self.info = kwargs
         self.info['hostname'] = SystemInfo.MyHostName
         self.info['resolvedname'] = SystemInfo.MyResolvedName
-        self.info['version'] = VERSION.Version
+        self.info['version'] = Version
 
     # Remember that __getattr__ is called only as a last resort if the key
     # isn't a normal attr.
@@ -69,9 +69,13 @@ class SourcedDict (dict):
         else:
             self['_source'] = _source
 
+        # self['_referenced_by'] = []
+
     def _mark_referenced_by(self, source):
-        if source not in self['_referenced_by']:
-            self['_referenced_by'].append(source)
+        refby = self.setdefault('_referenced_by', [])
+
+        if source not in refby:
+            refby.append(source)
 
 class DelayTrigger (threading.Thread):
     def __init__(self, onfired, timeout=5, name=None):

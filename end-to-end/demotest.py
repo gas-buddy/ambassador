@@ -7,12 +7,22 @@ import os
 import requests
 import yaml
 
+# Yes, it's a terrible idea to use skip cert verification for TLS.
+# We really don't care for this test though.
+import urllib3
+urllib3.disable_warnings()
+
 def call(url, headers=None, iterations=1):
     got = {}
 
     for x in range(iterations):
-        result = requests.get(url, headers=headers)
+        # Yes, it's a terrible idea to use skip cert verification for TLS.
+        # We really don't care for this test though.
+        result = requests.get(url, headers=headers, verify=False)
         version = 'unknown'
+
+        sys.stdout.write('.')
+        sys.stdout.flush()
 
         if result.status_code != 200:
             version='failure %d' % result.status_code
@@ -24,22 +34,34 @@ def call(url, headers=None, iterations=1):
         got.setdefault(version, 0)
         got[version] += 1
 
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    
     return got
 
 def test_demo(base, v2_wanted):
     url = "%s/demo/" % base
 
-    got = call(url, iterations=100)
+    attempts = 3
 
-    print(got)
-    v2_seen = got.get('2.0.0', 0)
-    rc = (abs(v2_seen - v2_wanted) <= 2)
+    while attempts > 0:
+        print("2.0.0: attempts left %d" % attempts)
+        got = call(url, iterations=100)
 
-    print("wanted v2_wanted %d" % v2_wanted)
-    print("saw    v2_seen   %d" % v2_seen)
-    print("returning %s" % rc)
+        print(got)
+        v2_seen = got.get('2.0.0', 0)
+        delta = abs(v2_seen - v2_wanted)
+        rc = (delta <= 2)
 
-    return rc
+        print("2.0.0: wanted %d, got %d (delta %d) => %s" % 
+              (v2_wanted, v2_seen, delta, "pass" if rc else "FAIL"))
+
+        if rc:
+            return rc
+
+        attempts -= 1
+
+    return False
 
 def test_from_yaml(base, yaml_path):
     spec = yaml.safe_load(open(yaml_path, "r"))
@@ -106,7 +128,7 @@ def test_from_yaml(base, yaml_path):
 if __name__ == "__main__":
     base = sys.argv[1]
 
-    if not base.startswith("http://"):
+    if not (base.startswith("http://") or base.startswith("https://")):
         base = "http://%s" % base
 
     v2_percent = None

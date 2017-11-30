@@ -1,6 +1,6 @@
 import hashlib
 
-from utils import SourcedDict
+from .utils import SourcedDict
 
 class Mapping (object):
     @classmethod
@@ -13,7 +13,9 @@ class Mapping (object):
 
         for hdr in headers:
             h.update(hdr['name'].encode('utf-8'))
-            h.update(hdr['value'].encode('utf-8'))
+
+            if 'value' in hdr:
+                h.update(hdr['value'].encode('utf-8'))
 
         return h.hexdigest()
 
@@ -59,7 +61,10 @@ class Mapping (object):
         self.headers = []
 
         for name, value in self.get('headers', {}).items():
-            self.headers.append({ "name": name, "value": value, "regex": False })
+            if value == True:
+                self.headers.append({ "name": name })
+            else:
+                self.headers.append({ "name": name, "value": value, "regex": False })
 
         for name, value in self.get('regex_headers', []):
             self.headers.append({ "name": name, "value": value, "regex": True })
@@ -90,6 +95,7 @@ class Mapping (object):
     def new_route(self, cluster_name):
         route = SourcedDict(
             _source=self['_source'],
+            group_id=self.group_id,
             prefix=self.prefix,
             prefix_rewrite=self.get('rewrite', '/'),
             clusters=[ { "name": cluster_name,
@@ -104,6 +110,9 @@ class Mapping (object):
         # route's '_method' key -- diag uses it to make life easier.
 
         route['_method'] = self.method
+
+        # We refer to this route, of course.
+        route._mark_referenced_by(self['_source'])
 
         # There's a slew of things we'll just copy over transparently; handle
         # those.
